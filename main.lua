@@ -5,6 +5,7 @@ Kojump is a plugin to provide browser-style back/forward history navigation for 
 local Dispatcher = require("dispatcher")
 local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
+local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
@@ -36,6 +37,12 @@ function Kojump:onDispatcherRegisterActions()
         title = _("Kojump: Go Forward"),
         general = true,
     })
+    Dispatcher:registerAction("kojump_show_history", {
+        category = "none",
+        event = "KojumpShowHistory",
+        title = _("Kojump: Show History"),
+        general = true,
+    })
 end
 
 function Kojump:addToMainMenu(menu_items)
@@ -51,6 +58,13 @@ function Kojump:addToMainMenu(menu_items)
         sorting_hint = "navi",
         callback = function()
             self:goForward()
+        end,
+    }
+    menu_items.kojump_show_history = {
+        text = _("Kojump: Show History"),
+        sorting_hint = "navi",
+        callback = function()
+            self:showHistory()
         end,
     }
 end
@@ -180,6 +194,50 @@ end
 
 function Kojump:onKojumpForward()
     self:goForward()
+end
+
+function Kojump:onKojumpShowHistory()
+    self:showHistory()
+end
+
+function Kojump:showHistory()
+    if not self:canGoBack() and not self:canGoForward() then
+        UIManager:show(InfoMessage:new{
+            text = _("Cannot show history: No history available."),
+            timeout = 1.5,
+        })
+        return
+    end
+
+    local items = {}
+    for i = #self.history, 1, -1 do
+        local page_num = self.history[i]
+        local label
+        if i == self.history_idx then
+            label = string.format(_("• Page %d (Current)"), page_num)
+        elseif i > self.history_idx then
+            label = string.format(_("→ Page %d"), page_num)
+        else
+            label = string.format(_("← Page %d"), page_num)
+        end
+
+        table.insert(items, {
+            text = label,
+            callback = function()
+                self.history_idx = i
+                local target_page = self.history[i]
+                self.is_navigating = true
+                self:saveHistory()
+                self:jumpToPage(target_page, _("Jumped to page %d"))
+            end
+        })
+    end
+
+    local menu = Menu:new{
+        title = _("Kojump History"),
+        item_table = items,
+    }
+    UIManager:show(menu)
 end
 
 function Kojump:jumpToPage(page_num, message_fmt)

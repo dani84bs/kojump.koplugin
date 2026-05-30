@@ -11,6 +11,7 @@ describe("kojump plugin", function()
         package.loaded["dispatcher"] = nil
         package.loaded["ui/event"] = nil
         package.loaded["ui/widget/infomessage"] = nil
+        package.loaded["ui/widget/menu"] = nil
         package.loaded["ui/uimanager"] = nil
         package.loaded["ui/widget/container/widgetcontainer"] = nil
         package.loaded["gettext"] = nil
@@ -58,7 +59,14 @@ describe("kojump plugin", function()
                 end
             }
         end
+        local mock_menu = {
+            new = function(self, tbl)
+                return tbl
+            end
+        }
+
         package.preload["ui/widget/infomessage"] = function() return mock_infomessage end
+        package.preload["ui/widget/menu"] = function() return mock_menu end
         package.preload["ui/uimanager"] = function() return mock_uimanager end
         package.preload["ui/widget/container/widgetcontainer"] = function() return mock_widgetcontainer end
         package.preload["gettext"] = function()
@@ -250,5 +258,70 @@ describe("kojump plugin", function()
 
         assert.are.equal(2, #other_plugin.history)
         assert.are.equal(2, other_plugin.history_idx)
+    end)
+
+    it("should show an info message if history is empty or contains only current page when showHistory is called", function()
+        local plugin = Kojump:new{ ui = { menu = { registerToMainMenu = function() end } } }
+        plugin:init()
+
+        plugin:showHistory()
+
+        assert.are.equal(1, #mock_uimanager.shown)
+        assert.are.equal("Cannot show history: No history available.", mock_uimanager.shown[1].text)
+    end)
+
+    it("should show history menu with correctly formatted items in reverse chronological order", function()
+        local handle_event_called = nil
+        local mock_ui = {
+            menu = { registerToMainMenu = function() end },
+            handleEvent = function(self, ev)
+                handle_event_called = ev
+            end
+        }
+        local plugin = Kojump:new{ ui = mock_ui }
+        plugin:init()
+
+        -- Set up some history jumps: 10 -> 20 -> 30 -> 40
+        plugin:onPageUpdate(10)
+        plugin:onPageUpdate(20)
+        plugin:onPageUpdate(30)
+        plugin:onPageUpdate(40)
+
+        -- Now let's navigate back to page 30 (history_idx = 3)
+        plugin:goBack()
+        plugin:onPageUpdate(30)
+        assert.are.equal(3, plugin.history_idx)
+        assert.are.equal(40, plugin.history[4])
+
+        -- Reset mock_uimanager shown list
+        mock_uimanager.shown = {}
+
+        plugin:showHistory()
+
+        -- It should show the menu widget
+        assert.are.equal(1, #mock_uimanager.shown)
+        local menu = mock_uimanager.shown[1]
+        assert.are.equal("Kojump History", menu.title)
+        
+        -- The items table should be in reverse chronological order:
+        -- index 4 (forward): Page 40 -> label should be "→ Page 40"
+        -- index 3 (current): Page 30 -> label should be "• Page 30 (Current)"
+        -- index 2 (back): Page 20 -> label should be "← Page 20"
+        -- index 1 (back): Page 10 -> label should be "← Page 10"
+        local items = menu.item_table
+        assert.are.equal(4, #items)
+
+        assert.are.equal("→ Page 40", items[1].text)
+        assert.are.equal("• Page 30 (Current)", items[2].text)
+        assert.are.equal("← Page 20", items[3].text)
+        assert.are.equal("← Page 10", items[4].text)
+
+        -- Selecting items[3] (index 2: Page 20) should trigger navigation to page 20
+        items[3].callback()
+
+        assert.are.equal(2, plugin.history_idx)
+        assert.is_true(plugin.is_navigating)
+        assert.are.equal("GotoPage", handle_event_called.name)
+        assert.are.equal(20, handle_event_called.page)
     end)
 end)
