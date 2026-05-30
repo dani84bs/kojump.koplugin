@@ -276,7 +276,21 @@ describe("kojump plugin", function()
             menu = { registerToMainMenu = function() end },
             handleEvent = function(self, ev)
                 handle_event_called = ev
-            end
+            end,
+            document = {
+                getPageCount = function() return 200 end
+            },
+            toc = {
+                getTocTitleByPage = function(self, page_num)
+                    if page_num == 30 then
+                        return "Introduction"
+                    elseif page_num == 40 then
+                        return "This is an extremely long chapter title that should be truncated"
+                    else
+                        return nil
+                    end
+                end
+            }
         }
         local plugin = Kojump:new{ ui = mock_ui }
         plugin:init()
@@ -304,17 +318,17 @@ describe("kojump plugin", function()
         assert.are.equal("Kojump History", menu.title)
         
         -- The items table should be in reverse chronological order:
-        -- index 4 (forward): Page 40 -> label should be "→ Page 40"
-        -- index 3 (current): Page 30 -> label should be "• Page 30 (Current)"
-        -- index 2 (back): Page 20 -> label should be "← Page 20"
-        -- index 1 (back): Page 10 -> label should be "← Page 10"
+        -- index 4 (forward): Page 40 (20%) - This is an extremely long chapter title ... -> label should be "→ Page 40 (20%) - This is an extremely long chapter title ..."
+        -- index 3 (current): Page 30 (15%) - Introduction -> label should be "• Page 30 (15%) - Introduction (Current)"
+        -- index 2 (back): Page 20 (10%) -> label should be "← Page 20 (10%)"
+        -- index 1 (back): Page 10 (5%) -> label should be "← Page 10 (5%)"
         local items = menu.item_table
         assert.are.equal(4, #items)
 
-        assert.are.equal("→ Page 40", items[1].text)
-        assert.are.equal("• Page 30 (Current)", items[2].text)
-        assert.are.equal("← Page 20", items[3].text)
-        assert.are.equal("← Page 10", items[4].text)
+        assert.are.equal("→ Page 40 (20%) - This is an extremely long chapter title ...", items[1].text)
+        assert.are.equal("• Page 30 (15%) - Introduction (Current)", items[2].text)
+        assert.are.equal("← Page 20 (10%)", items[3].text)
+        assert.are.equal("← Page 10 (5%)", items[4].text)
 
         -- Selecting items[3] (index 2: Page 20) should trigger navigation to page 20
         items[3].callback()
@@ -323,5 +337,27 @@ describe("kojump plugin", function()
         assert.is_true(plugin.is_navigating)
         assert.are.equal("GotoPage", handle_event_called.name)
         assert.are.equal(20, handle_event_called.page)
+    end)
+
+    it("should gracefully fall back if document or TOC is missing or incomplete", function()
+        local mock_ui = {
+            menu = { registerToMainMenu = function() end },
+            handleEvent = function(self, ev) end
+        }
+        local plugin = Kojump:new{ ui = mock_ui }
+        plugin:init()
+
+        plugin:onPageUpdate(10)
+        plugin:onPageUpdate(20)
+
+        mock_uimanager.shown = {}
+        plugin:showHistory()
+
+        local menu = mock_uimanager.shown[1]
+        local items = menu.item_table
+        assert.are.equal(2, #items)
+        -- No percentage and no chapter because document and toc are missing
+        assert.are.equal("• Page 20 (Current)", items[1].text)
+        assert.are.equal("← Page 10", items[2].text)
     end)
 end)

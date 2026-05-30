@@ -10,6 +10,28 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
+local function truncate_utf8(str, max_chars)
+    if not str then return nil end
+    local char_count = 0
+    local byte_idx = 0
+    for i = 1, #str do
+        local byte = string.byte(str, i)
+        -- Byte is not a continuation byte (i.e. not in the range [128, 191])
+        if byte < 128 or byte >= 192 then
+            char_count = char_count + 1
+            if char_count > max_chars then
+                byte_idx = i - 1
+                break
+            end
+        end
+    end
+
+    if char_count > max_chars then
+        return string.sub(str, 1, byte_idx) .. "..."
+    end
+    return str
+end
+
 local Kojump = WidgetContainer:extend{
     name = "kojump",
     is_doc_only = true,
@@ -210,15 +232,34 @@ function Kojump:showHistory()
     end
 
     local items = {}
+    local total_pages = self.ui.document and self.ui.document:getPageCount()
+
     for i = #self.history, 1, -1 do
         local page_num = self.history[i]
+
+        local percentage_str = ""
+        if total_pages and total_pages > 0 then
+            local percent = math.floor(page_num / total_pages * 100)
+            percentage_str = string.format(" (%d%%)", percent)
+        end
+
+        local chapter_str = ""
+        local chapter_title = self.ui.toc and self.ui.toc:getTocTitleByPage(page_num)
+        if chapter_title and type(chapter_title) == "string" then
+            chapter_title = chapter_title:match("^%s*(.-)%s*$")
+            if chapter_title ~= "" then
+                local truncated_title = truncate_utf8(chapter_title, 40)
+                chapter_str = " - " .. truncated_title
+            end
+        end
+
         local label
         if i == self.history_idx then
-            label = string.format(_("• Page %d (Current)"), page_num)
+            label = string.format(_("• Page %d%s%s (Current)"), page_num, percentage_str, chapter_str)
         elseif i > self.history_idx then
-            label = string.format(_("→ Page %d"), page_num)
+            label = string.format(_("→ Page %d%s%s"), page_num, percentage_str, chapter_str)
         else
-            label = string.format(_("← Page %d"), page_num)
+            label = string.format(_("← Page %d%s%s"), page_num, percentage_str, chapter_str)
         end
 
         table.insert(items, {
