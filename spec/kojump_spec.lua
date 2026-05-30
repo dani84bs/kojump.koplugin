@@ -128,6 +128,25 @@ describe("kojump plugin", function()
         assert.are.equal(3, plugin.history_idx)
     end)
 
+    it("should record source page of jump if manually navigated", function()
+        local plugin = Kojump:new{ ui = { menu = { registerToMainMenu = function() end } } }
+        plugin:init()
+
+        plugin:onPageUpdate(5)   -- Start on 5. History: {5}, idx: 1, current_page: 5
+        plugin:onPageUpdate(6)   -- Turn. History: {5}, idx: 1, current_page: 6
+        plugin:onPageUpdate(7)   -- Turn. History: {5}, idx: 1, current_page: 7
+        plugin:onPageUpdate(8)   -- Turn. History: {5}, idx: 1, current_page: 8
+        plugin:onPageUpdate(9)   -- Turn. History: {5}, idx: 1, current_page: 9
+
+        plugin:onPageUpdate(50)  -- Jump to 50. History: {5, 9, 50}, idx: 3, current_page: 50
+
+        assert.are.equal(3, #plugin.history)
+        assert.are.equal(5, plugin.history[1])
+        assert.are.equal(9, plugin.history[2])
+        assert.are.equal(50, plugin.history[3])
+        assert.are.equal(3, plugin.history_idx)
+    end)
+
     it("should handle back and forward navigation", function()
         local handle_event_called = nil
         local mock_ui = {

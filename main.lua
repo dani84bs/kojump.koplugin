@@ -114,11 +114,18 @@ function Kojump:onPageUpdate(page_num)
             table.remove(self.history)
         end
 
+        -- If our current page (source of jump) is not already the last recorded page in history,
+        -- record the source page first so the user can jump back to where they manually navigated.
+        if self.history[self.history_idx] ~= self.current_page then
+            table.insert(self.history, self.current_page)
+            self.history_idx = self.history_idx + 1
+        end
+
         table.insert(self.history, page_num)
         self.history_idx = self.history_idx + 1
 
         -- Enforce capacity of 20 entries
-        if #self.history > 20 then
+        while #self.history > 20 do
             table.remove(self.history, 1)
             self.history_idx = self.history_idx - 1
         end
