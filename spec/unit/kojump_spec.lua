@@ -73,7 +73,7 @@ describe("kojump plugin", function()
             return function(str) return str end
         end
 
-        package.path = "./?.lua;" .. package.path
+        package.path = "plugins/kojump.koplugin/?.lua;./?.lua;" .. package.path
         Kojump = require("main")
     end)
 
