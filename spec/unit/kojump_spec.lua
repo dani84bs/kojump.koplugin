@@ -73,6 +73,19 @@ describe("kojump plugin", function()
             return function(str) return str end
         end
 
+        _G.G_reader_settings = {
+            settings = {},
+        }
+        function _G.G_reader_settings:readSetting(key, default)
+            if self.settings[key] == nil then
+                return default
+            end
+            return self.settings[key]
+        end
+        function _G.G_reader_settings:saveSetting(key, val)
+            self.settings[key] = val
+        end
+
         package.path = "plugins/kojump.koplugin/?.lua;./?.lua;" .. package.path
         Kojump = require("main")
     end)
@@ -359,5 +372,77 @@ describe("kojump plugin", function()
         -- No percentage and no chapter because document and toc are missing
         assert.are.equal("• Page 20 (Current)", items[1].text)
         assert.are.equal("← Page 10", items[2].text)
+    end)
+
+    it("should default to 20 max jumps if setting is not configured", function()
+        local plugin = Kojump:new{ ui = { menu = { registerToMainMenu = function() end } } }
+        plugin:init()
+        assert.are.equal(20, plugin.max_jumps)
+    end)
+
+    it("should respect configured max jumps setting", function()
+        _G.G_reader_settings:saveSetting("kojump_max_jumps", 10)
+        local plugin = Kojump:new{ ui = { menu = { registerToMainMenu = function() end } } }
+        plugin:init()
+        assert.are.equal(10, plugin.max_jumps)
+
+        plugin:onPageUpdate(1)
+        for i = 2, 15 do
+            plugin:onPageUpdate(i * 10)
+        end
+
+        assert.are.equal(10, #plugin.history)
+        assert.are.equal(10, plugin.history_idx)
+        assert.are.equal(60, plugin.history[1])
+        assert.are.equal(150, plugin.history[10])
+    end)
+
+    it("should prune history immediately when capacity is reduced", function()
+        local plugin = Kojump:new{ ui = { menu = { registerToMainMenu = function() end } } }
+        plugin:init()
+
+        plugin:onPageUpdate(1)
+        for i = 2, 15 do
+            plugin:onPageUpdate(i * 10)
+        end
+        assert.are.equal(15, #plugin.history)
+
+        local mock_spinwidget = {
+            new = function(self, tbl)
+                self.tbl = tbl
+                return self
+            end,
+        }
+        package.preload["ui/widget/spinwidget"] = function() return mock_spinwidget end
+
+        plugin:showMaxJumpsDialog()
+
+        local spin = mock_uimanager.shown[#mock_uimanager.shown]
+        spin.tbl.callback({ value = 8 })
+
+        assert.are.equal(8, plugin.max_jumps)
+        assert.are.equal(8, #plugin.history)
+        assert.are.equal(8, plugin.history_idx)
+        assert.are.equal(80, plugin.history[1])
+        assert.are.equal(150, plugin.history[8])
+        assert.are.equal(8, _G.G_reader_settings:readSetting("kojump_max_jumps"))
+
+        package.preload["ui/widget/spinwidget"] = nil
+    end)
+
+    it("should add Kojump settings submenu to Plugins menu", function()
+        local plugin = Kojump:new{ ui = { menu = { registerToMainMenu = function() end } } }
+        plugin:init()
+
+        local menu_items = {}
+        plugin:addToMainMenu(menu_items)
+
+        assert.is_not_nil(menu_items.kojump)
+        assert.are.equal("more_tools", menu_items.kojump.sorting_hint)
+        assert.are.equal("Kojump", menu_items.kojump.text)
+
+        local submenu = menu_items.kojump.sub_item_table_func()
+        assert.are.equal(1, #submenu)
+        assert.are.equal("Max Jumps", submenu[1].text)
     end)
 end)

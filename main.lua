@@ -42,6 +42,7 @@ function Kojump:init()
     self.history_idx = 0
     self.current_page = nil
     self.is_navigating = false
+    self.max_jumps = G_reader_settings and G_reader_settings:readSetting("kojump_max_jumps", 20) or 20
 
     self.ui.menu:registerToMainMenu(self)
 end
@@ -89,6 +90,49 @@ function Kojump:addToMainMenu(menu_items)
             self:showHistory()
         end,
     }
+    menu_items.kojump = {
+        text = _("Kojump"),
+        sorting_hint = "more_tools",
+        sub_item_table_func = function()
+            return self:getSubMenuItems()
+        end,
+    }
+end
+
+function Kojump:getSubMenuItems()
+    return {
+        {
+            text = _("Max Jumps"),
+            callback = function(menu)
+                self:showMaxJumpsDialog(menu)
+            end,
+        }
+    }
+end
+
+function Kojump:showMaxJumpsDialog(menu)
+    local SpinWidget = require("ui/widget/spinwidget")
+    local max_jumps_spin = SpinWidget:new {
+        value = self.max_jumps,
+        value_min = 5,
+        value_max = 100,
+        value_step = 1,
+        value_hold_step = 5,
+        ok_text = _("Save"),
+        title_text = _("Kojump Max Jumps"),
+        callback = function(spin)
+            self.max_jumps = spin.value
+            if G_reader_settings then
+                G_reader_settings:saveSetting("kojump_max_jumps", self.max_jumps)
+            end
+            self:pruneHistory()
+            self:saveHistory()
+            if menu then
+                menu:updateItems()
+            end
+        end,
+    }
+    UIManager:show(max_jumps_spin)
 end
 
 function Kojump:onDocSettingsLoad(doc_settings)
@@ -160,16 +204,25 @@ function Kojump:onPageUpdate(page_num)
         table.insert(self.history, page_num)
         self.history_idx = self.history_idx + 1
 
-        -- Enforce capacity of 20 entries
-        while #self.history > 20 do
-            table.remove(self.history, 1)
-            self.history_idx = self.history_idx - 1
-        end
+        -- Enforce capacity
+        self:pruneHistory()
 
         self:saveHistory()
     end
 
     self.current_page = page_num
+end
+
+function Kojump:pruneHistory()
+    while #self.history > self.max_jumps do
+        table.remove(self.history, 1)
+        self.history_idx = self.history_idx - 1
+    end
+    if #self.history == 0 then
+        self.history_idx = 0
+    elseif self.history_idx < 1 then
+        self.history_idx = 1
+    end
 end
 
 function Kojump:canGoBack()
