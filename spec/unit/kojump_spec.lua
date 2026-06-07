@@ -445,4 +445,17 @@ describe("kojump plugin", function()
         assert.are.equal(1, #submenu)
         assert.are.equal("Max Jumps", submenu[1].text)
     end)
+
+    it("should register Kojump actions during initialization with reader = true", function()
+        local plugin = Kojump:new{ ui = { menu = { registerToMainMenu = function() end } } }
+        plugin:init()
+
+        assert.is_not_nil(mock_dispatcher.registered_actions["kojump_back"])
+        assert.is_not_nil(mock_dispatcher.registered_actions["kojump_forward"])
+        assert.is_not_nil(mock_dispatcher.registered_actions["kojump_show_history"])
+
+        assert.is_true(mock_dispatcher.registered_actions["kojump_back"].reader)
+        assert.is_true(mock_dispatcher.registered_actions["kojump_forward"].reader)
+        assert.is_true(mock_dispatcher.registered_actions["kojump_show_history"].reader)
+    end)
 end)

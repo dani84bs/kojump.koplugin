@@ -44,6 +44,7 @@ function Kojump:init()
     self.is_navigating = false
     self.max_jumps = G_reader_settings and G_reader_settings:readSetting("kojump_max_jumps", 20) or 20
 
+    self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
 end
 
@@ -52,19 +53,19 @@ function Kojump:onDispatcherRegisterActions()
         category = "none",
         event = "KojumpBack",
         title = _("Kojump: Go Back"),
-        general = true,
+        reader = true,
     })
     Dispatcher:registerAction("kojump_forward", {
         category = "none",
         event = "KojumpForward",
         title = _("Kojump: Go Forward"),
-        general = true,
+        reader = true,
     })
     Dispatcher:registerAction("kojump_show_history", {
         category = "none",
         event = "KojumpShowHistory",
         title = _("Kojump: Show History"),
-        general = true,
+        reader = true,
     })
 end
 
